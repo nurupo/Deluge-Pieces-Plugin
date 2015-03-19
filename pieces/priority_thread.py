@@ -2,6 +2,7 @@
 # priority_thread.py
 #
 # Copyright (C) 2010 Nick Lanham <nick@afternight.org>
+# Copyright (C) 2015 Maxim Biro <nurupo.contributions@gmail.com>
 #
 # Basic plugin template created by:
 # Copyright (C) 2008 Martijn Voncken <mvoncken@gmail.com>
@@ -39,33 +40,34 @@
 from deluge.ui.client import client
 import deluge.component as component
 
-__target_priority = 5
-__last_first = {}
+starting_priority = 7
+ending_priority = 2
+# How many pieces of each priority to have
+piece_count = 4
 
 def priority_loop(meth):
     torrents = meth()
     for t in torrents:
-        tor = component.get("TorrentManager").torrents[t]
-        if tor.status.state == tor.status.downloading:
-            lf = __last_first.get(t)
-            if not(lf):
-                lf = 0
-            try:
-                cand = tor.status.pieces.index(False,lf)
-                if (tor.handle.piece_priority(cand) == 0):
-                    prios = tor.handle.piece_priorities()
-                    while (tor.handle.piece_priority(cand) == 0):
-                        cand += 1
-                        pcand = 0
-                        for (i,x) in enumerate(prios[cand:]):
-                            if x > 0:
-                                pcand = i + cand
-                                break
-                        cand = max(tor.status.pieces.index(False,cand), pcand)
-                lf = cand
-            except ValueError:
+        try:
+            tor = component.get("TorrentManager").torrents[t]
+            if tor.status.state != tor.status.downloading:
                 continue
-            # lf is now the first un-downloaded, desired piece of this torrent
-            if (tor.handle.piece_priority(lf) < __target_priority):
-                tor.handle.piece_priority(lf,__target_priority)
-            __last_first[t] = lf
+            count = 0
+            priority = starting_priority
+            for (i,x) in enumerate(tor.status.pieces):
+                if (x == True):
+                    continue
+                count += 1
+                if (tor.handle.piece_priority(i) < priority):
+                    tor.handle.piece_priority(i, priority)
+                elif (priority == -9):
+                    tor.handle.piece_priority(i, 0)
+
+                if (count > piece_count):
+                    if (priority > ending_priority):
+                        count = 0
+                        priority -= 1
+                    else:
+                        priority = -9
+        except:
+            print traceback.format_exc()
